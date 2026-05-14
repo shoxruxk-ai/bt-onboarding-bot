@@ -205,7 +205,7 @@ def ask_gemini(lang: str, history: list, user_text: str) -> str:
     contents.append({"role": "user", "parts": [{"text": user_text}]})
 
     payload = {
-        "systemInstruction": {
+        "system-instruction": {
             "parts": [{"text": SYSTEM_PROMPTS[lang]}]
         },
         "contents": contents,
