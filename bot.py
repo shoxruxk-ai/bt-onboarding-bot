@@ -215,11 +215,7 @@ def ask_gemini(lang: str, history: list, user_text: str) -> str:
         }
     }
 
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/"
-        "models/gemini-2.0-flash:generateContent?key=***"
-    )
-    resp = requests.post(url, json=payload, timeout=30)
+    resp = requests.post(GEMINI_URL, json=payload, timeout=30)
     resp.raise_for_status()
     data = resp.json()
     return data["candidates"][0]["content"]["parts"][0]["text"]
