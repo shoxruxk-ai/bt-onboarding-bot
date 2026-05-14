@@ -1,11 +1,10 @@
 """
 Baker Tilly Tashkent — Onboarding Bot
-Telegram bot powered by Google Gemini 2.0 Flash (free tier)
+Telegram + Gemini 2.0 Flash via direct HTTP (no Google SDK)
 """
 
 import os
-from google import genai
-from google.genai import types
+import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
@@ -16,9 +15,13 @@ from telegram.ext import (
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 
-gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+GEMINI_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/"
+    "models/gemini-2.0-flash:generateContent"
+    f"?key={GEMINI_API_KEY}"
+)
 
-# ── Content ──────────────────────────────────────────────────────────────────
+# ── Topics & Questions ────────────────────────────────────────────────────────
 TOPICS = {
     "ru": [
         ("📋 Трудовой распорядок",   "rules"),
@@ -56,24 +59,24 @@ TOPIC_QUESTIONS = {
     "uz": {
         "rules":     "Ichki mehnat tartibi qoidalari haqida aytib bering",
         "ethics":    "Auditorning kasbiy axloq kodeksi haqida aytib bering",
-        "hr":        "Ta'til yoki kasallik varaqasini qanday rasmiylashtirish mumkin?",
+        "hr":        "Talil yoki kasallik varaqasini qanday rasmiylashtirish mumkin?",
         "career":    "Baker Tilly Tashkentda martaba zinapoyasi qanday?",
-        "probation": "Sinov muddati qanday o'tadi? Mendan nima kutiladi?",
+        "probation": "Sinov muddati qanday otadi? Mendan nima kutiladi?",
         "it":        "Qanday IT vositalar ishlatiladi? Kirish huquqlarini qanday olish mumkin?",
         "culture":   "Kompaniyaning korporativ madaniyati va qadriyatlari haqida aytib bering",
-        "training":  "O'qitish, sertifikatsiya va kasbiy rivojlanish imkoniyatlari qanday?",
+        "training":  "Oqitish, sertifikatsiya va kasbiy rivojlanish imkoniyatlari qanday?",
     },
 }
 
 GREETINGS = {
     "ru": (
-        "👋 Добро пожаловать в *Baker Tilly Tashkent*!\n\n"
+        "👋 Добро пожаловать в Baker Tilly Tashkent!\n\n"
         "Я ваш персональный помощник по адаптации. "
         "Отвечу на любые вопросы о компании, процедурах и карьере.\n\n"
         "Выберите тему или напишите свой вопрос:"
     ),
     "uz": (
-        "👋 *Baker Tilly Tashkent*ga xush kelibsiz!\n\n"
+        "👋 Baker Tilly Tashkentga xush kelibsiz!\n\n"
         "Men sizning shaxsiy moslashuv yordamchisiman. "
         "Kompaniya, jarayonlar va martabangiz haqida savollarga javob beraman.\n\n"
         "Mavzuni tanlang yoki savolingizni yozing:"
@@ -81,112 +84,145 @@ GREETINGS = {
 }
 
 SYSTEM_PROMPTS = {
-    "ru": """Ты тёплый, профессиональный помощник по онбордингу в Baker Tilly Tashkent — международной аудиторской компании, входящей в глобальную сеть Baker Tilly.
+    "ru": """Ты тёплый, профессиональный помощник по онбордингу в Baker Tilly Tashkent.
+Отвечай ТОЛЬКО на русском языке. Используй простой понятный текст без markdown.
 
-Отвечай ТОЛЬКО на русском языке. Используй простое форматирование (без markdown). Будь тёплым и практичным.
-
-ПРАВИЛА ВНУТРЕННЕГО ТРУДОВОГО РАСПОРЯДКА:
+ТРУДОВОЙ РАСПОРЯДОК:
 - Рабочие часы: 9:00-18:00, пн-пт, обед 13:00-14:00
-- Дресс-код: деловой для встреч с клиентами; деловой повседневный в офисе (джинсы запрещены пн-вт)
-- Удалённая работа: гибрид после испытательного срока (до 2 дней/нед, с согласия руководителя)
-- Опоздание/отсутствие: немедленно уведомить руководителя
-- Ежегодный медосмотр оплачивается компанией
+- Дресс-код: деловой для клиентов; деловой повседневный в офисе (джинсы запрещены пн-вт)
+- Удалёнка: гибрид после испытательного срока (до 2 дней/нед, с согласия руководителя)
+- Опоздание: немедленно уведомить руководителя
+- Медосмотр: оплачивается компанией
 
-КОДЕКС ПРОФЕССИОНАЛЬНОЙ ЭТИКИ:
-- Независимость и объективность в аудите — абсолютное требование
-- Строгая конфиденциальность данных клиентов
+КОДЕКС ЭТИКИ:
+- Независимость и объективность — обязательное требование
+- Конфиденциальность данных клиентов — строгая
 - Личная связь с клиентом — немедленно сообщить партнёру
-- Нулевая терпимость к подаркам более 50 000 UZS от клиентов
-- Соцсети: запрещено публиковать о клиентах без согласования
-- Ежегодное обучение по этике — обязательно для всех
+- Подарки от клиентов свыше 50 000 UZS — запрещены
+- Публикации о клиентах в соцсетях — только с согласования
+- Ежегодное обучение по этике — обязательно
 
 HR-ПРОЦЕДУРЫ:
-- Ежегодный отпуск: 21 рабочий день (пропорционально в первый год)
-- Оформление отпуска: уведомить HR и руководителя за 2 недели, заполнить форму в 1С, получить подпись руководителя
-- Больничный: медсправка + сдать в HR в течение 3 рабочих дней после выхода
+- Отпуск: 21 рабочий день в год (пропорционально в первый год)
+- Оформление отпуска: уведомить HR и руководителя за 2 недели, форма в 1С, подпись руководителя
+- Больничный: медсправка + сдать в HR за 3 рабочих дня после выхода
 - Зарплата: 10-го числа каждого месяца
-- Аванс: до 25-го предыдущего месяца (макс 50%), письменный запрос в бухгалтерию
-- Медстраховка: активируется через 3 месяца
-- Корпоративная связь: от уровня старший аудитор и выше
+- Аванс: до 25-го (макс 50%), письменный запрос в бухгалтерию
+- Медстраховка: с 4-го месяца работы
+- Корпоративный телефон: от уровня старший аудитор
 
 КАРЬЕРНАЯ ЛЕСТНИЦА:
 - Младший аудитор -> Аудитор -> Старший аудитор -> Менеджер -> Старший менеджер -> Партнёр
-- Ежегодная оценка: ноябрь-декабрь
-- KPI: выполнение нормы часов, качество работы, обратная связь клиентов, профразвитие
-- Сертификации (ACCA, CPA, DipIFR, CIA): 70% стоимости компенсируется, обязательство остаться на 1 год
+- Оценка: ежегодно, ноябрь-декабрь
+- KPI: норма часов, качество работы, отзывы клиентов, профразвитие
+- ACCA/CPA/DipIFR/CIA: 70% стоимости компенсируется (обязательство 1 год)
 
 ИСПЫТАТЕЛЬНЫЙ СРОК:
-- Длительность: 3 месяца
-- Неделя 1: ориентация с HR, назначение наставника, постановка KPI
+- 3 месяца
+- Неделя 1: ориентация с HR, наставник, KPI
 - Неделя 6: промежуточная встреча с руководителем
 - Месяц 3: официальная оценка
-- Зарплата в период испытания — как в договоре
+- Зарплата как в договоре
 
-IT И ИНСТРУМЕНТЫ:
-- День 1: IT настраивает рабочее место и email (имя.фамилия@bakertilly.uz)
-- Инструменты: Microsoft 365, Teams, SharePoint, Outlook
-- Аудит: CaseWare Working Papers, IDEA/ACL для аналитики
-- Учёт времени: ежедневно в TimeBilling (обязательно)
-- VPN обязателен для удалённой работы
-- IT-поддержка: it@bakertilly.uz или канал IT Support в Teams
+IT:
+- День 1: email (имя.фамилия@bakertilly.uz), Teams, рабочее место
+- Программы: Microsoft 365, Teams, CaseWare, IDEA/ACL, TimeBilling
+- VPN обязателен для удалёнки
+- IT-поддержка: it@bakertilly.uz
 
 КОРПОРАТИВНАЯ КУЛЬТУРА:
-- Политика открытых дверей
-- Еженедельные командные встречи: понедельник 9:15
-- Ежемесячный общий сбор: последняя пятница месяца
-- Baker Tilly International: глобальный портал знаний, стажировки за рубежом после 2+ лет
-- Ценности: честность, качество, уважение, развитие, сотрудничество
+- Открытые двери: любой сотрудник может обратиться к любому руководителю
+- Понедельник 9:15 — командная встреча
+- Последняя пятница месяца — общий сбор
+- Baker Tilly International: стажировки за рубежом после 2+ лет
+- Ценности: честность, качество, уважение, развитие, командная работа
 
-ОБУЧЕНИЕ И РАЗВИТИЕ:
-- Онбординг: первые 2 недели — структурированная программа
-- Внутренние тренинги: каждый месяц (пятница 17:00)
-- E-learning портал Baker Tilly: 500+ курсов бесплатно
-- CPE: минимум 40 часов/год для лицензированных аудиторов
-- Курсы английского: 50% субсидирование
+ОБУЧЕНИЕ:
+- Первые 2 недели: структурированный онбординг
+- Ежемесячные тренинги (пятница 17:00)
+- E-learning портал Baker Tilly: 500+ курсов
+- CPE: 40 часов/год для лицензированных аудиторов
+- Английский язык: 50% субсидирование
 
 КОНТАКТЫ:
 - HR: hr@bakertilly.uz
 - IT: it@bakertilly.uz
-- Общие вопросы: info@bakertilly.uz
+- Общие: info@bakertilly.uz
 
-Если не знаешь точного ответа — направь в HR: hr@bakertilly.uz""",
+Если не знаешь ответа — направь в HR: hr@bakertilly.uz""",
 
-    "uz": """Siz Baker Tilly Tashkent onboarding yordamchisisiz. FAQAT o'zbek tilida (lotin) javob bering. Oddiy matn formatlashdan foydalaning.
+    "uz": """Sen Baker Tilly Tashkentda onboarding yordamchisisiz.
+FAQAT o'zbek tilida (lotin) javob ber. Oddiy matn ishlat.
 
-ICHKI MEHNAT TARTIBI:
+MEHNAT TARTIBI:
 - Ish vaqti: 9:00-18:00, du-ju, tushlik 13:00-14:00
 - Kiyim: mijozlar bilan rasmiy; ofisda ishchan-erkin (du-se jinsi taqiqlanadi)
-- Masofaviy ish: sinov muddatidan keyin gibrid (haftada 2 kungacha, menejer roziligi)
-- Kechikish/yoqlik: darhol menejerga xabar bering
+- Masofaviy: sinov muddatidan keyin (haftada 2 kun, menejer roziligi)
+- Kechikish: darhol menejerga xabar ber
 
-KASBIY AXLOQ KODEKSI:
-- Mustaqillik va obyektivlik auditing da mutlaq talab
-- Mijoz malumotlarining qatiy maxfiyligi
-- Mijozlardan 50 000 UZS dan ortiq sovga qabul qilish taqiqlanadi
-- Yillik axloq oqitishi barcha uchun majburiy
+AXLOQ KODEKSI:
+- Mustaqillik va obyektivlik — majburiy
+- Mijoz malumotlari — qatiy maxfiy
+- 50 000 UZS dan ortiq sovga — taqiqlangan
+- Yillik axloq oqitishi — majburiy
 
 HR JARAYONLARI:
 - Yillik talil: 21 ish kuni
-- Talil: HR va menejerga 2 hafta oldin xabar, 1C shaklini toldirish
-- Kasallik: tibbiy malumotnoma, ishga chiqqandan 3 kun ichida HR ga topshirish
-- Ish haqi: har oyning 10-sanasida
+- Talil: 2 hafta oldin xabar, 1C shakl, menejer imzosi
+- Kasallik: tibbiy malumotnoma, 3 kun ichida HR ga
+- Ish haqi: 10-sanada
+- Tibbiy sugurta: 4-oydan
 
 MARTABA ZINAPOYASI:
 - Kichik auditor -> Auditor -> Katta auditor -> Menejer -> Katta menejer -> Hamkor
 - Yillik baholash: noyabr-dekabr
-- Sertifikatlar (ACCA, CPA, DipIFR, CIA): 70% qoplanadi
+- ACCA/CPA/DipIFR/CIA: 70% qoplanadi
 
 SINOV MUDDATI:
-- Davomiyligi: 3 oy
-- 1-hafta: HR bilan yonaltirish, ustoz tayinlash, KPI belgilash
+- 3 oy
+- 1-hafta: HR, ustoz, KPI
 - 3-oy: rasmiy baholash
+
+IT:
+- 1-kun: email (ism.familiya@bakertilly.uz), Teams
+- Dasturlar: Microsoft 365, CaseWare, TimeBilling
+- IT yordam: it@bakertilly.uz
 
 KONTAKTLAR:
 - HR: hr@bakertilly.uz
 - IT: it@bakertilly.uz
 
-Aniq javob bilmasangiz: hr@bakertilly.uz ga murojaat qilishni tavsiya eting""",
+Javob bilmasang: hr@bakertilly.uz ga yubor""",
 }
+
+# ── Gemini via HTTP ────────────────────────────────────────────────────────────
+def ask_gemini(lang: str, history: list, user_text: str) -> str:
+    # Build conversation contents
+    contents = []
+    for m in history[-20:]:
+        role = "model" if m["role"] == "assistant" else "user"
+        contents.append({"role": role, "parts": [{"text": m["content"]}]})
+    contents.append({"role": "user", "parts": [{"text": user_text}]})
+
+    payload = {
+        "systemInstruction": {
+            "parts": [{"text": SYSTEM_PROMPTS[lang]}]
+        },
+        "contents": contents,
+        "generationConfig": {
+            "maxOutputTokens": 800,
+            "temperature": 0.7,
+        }
+    }
+
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/"
+        f"models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+    )
+    resp = requests.post(url, json=payload, timeout=30)
+    resp.raise_for_status()
+    data = resp.json()
+    return data["candidates"][0]["content"]["parts"][0]["text"]
 
 # ── Keyboards ─────────────────────────────────────────────────────────────────
 def lang_keyboard() -> InlineKeyboardMarkup:
@@ -207,25 +243,6 @@ def topics_keyboard(lang: str) -> InlineKeyboardMarkup:
     )])
     return InlineKeyboardMarkup(rows)
 
-# ── Gemini call (new google-genai SDK) ────────────────────────────────────────
-def ask_gemini(lang: str, history: list, user_text: str) -> str:
-    contents = []
-    for m in history:
-        role = "model" if m["role"] == "assistant" else "user"
-        contents.append(types.Content(role=role, parts=[types.Part(text=m["content"])]))
-    contents.append(types.Content(role="user", parts=[types.Part(text=user_text)]))
-
-    response = gemini_client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=contents,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPTS[lang],
-            max_output_tokens=800,
-            temperature=0.7,
-        ),
-    )
-    return response.text
-
 # ── Handlers ──────────────────────────────────────────────────────────────────
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data.clear()
@@ -241,16 +258,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if query.data.startswith("lang_"):
         lang = query.data.split("_")[1]
         context.user_data.update({"lang": lang, "history": []})
-        await query.edit_message_text(
-            GREETINGS[lang].replace("*", ""),
-            reply_markup=topics_keyboard(lang),
-        )
+        await query.edit_message_text(GREETINGS[lang], reply_markup=topics_keyboard(lang))
+
     elif query.data == "change_lang":
         context.user_data.clear()
         await query.edit_message_text(
             "🌐 Выберите язык / Tilni tanlang:",
             reply_markup=lang_keyboard(),
         )
+
     elif query.data.startswith("topic_"):
         topic_id = query.data.split("_", 1)[1]
         lang = context.user_data.get("lang", "ru")
@@ -271,8 +287,6 @@ async def process_message(
 ) -> None:
     lang    = context.user_data.get("lang", "ru")
     history = context.user_data.setdefault("history", [])
-    if len(history) > 20:
-        history[:] = history[-20:]
 
     msg_obj = update.callback_query.message if from_button else update.message
     await context.bot.send_chat_action(msg_obj.chat_id, "typing")
@@ -287,13 +301,13 @@ async def process_message(
         await msg_obj.reply_text(reply, reply_markup=topics_keyboard(lang))
 
     except Exception as e:
-        error_detail = str(e)
-        print(f"[ERROR] {error_detail}")
-        errors = {
-            "ru": f"Ошибка: {error_detail[:300]}\n\nНапишите на hr@bakertilly.uz",
-            "uz": f"Xatolik: {error_detail[:300]}\n\nhr@bakertilly.uz ga yozing",
+        err = str(e)
+        print(f"[ERROR] {err}")
+        msgs = {
+            "ru": f"Ошибка соединения: {err[:200]}\n\nПопробуйте позже или: hr@bakertilly.uz",
+            "uz": f"Ulanish xatosi: {err[:200]}\n\nhr@bakertilly.uz ga yozing",
         }
-        await msg_obj.reply_text(errors[lang])
+        await msg_obj.reply_text(msgs[lang])
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main() -> None:
@@ -301,8 +315,8 @@ def main() -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
-    print("✅ Baker Tilly Onboarding Bot (Gemini 2.0) is running...")
-    app.run_polling()
+    print("Baker Tilly Onboarding Bot started.")
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
