@@ -146,11 +146,11 @@ IT И ИНСТРУМЕНТЫ:
 • Курсы английского: 50% субсидирование
 
 КОНТАКТЫ:
-• HR: hr@bakertilly.uz
+• HR: shkabilov@bakertilly.uz
 • IT: it@bakertilly.uz
-• Общие вопросы: info@bakertilly.uz
+• Общие вопросы: shkabilov@bakertilly.uz
 
-Если не знаешь точного ответа — скажи обратиться в HR: hr@bakertilly.uz""",
+Если не знаешь точного ответа — скажи обратиться в HR: shkabilov@bakertilly.uz""",
 
     "uz": """Siz Baker Tilly Tashkent — Baker Tilly xalqaro tarmog'iga kiruvchi audit va konsalting kompaniyasida onboarding yordamchisisiz.
 
@@ -215,10 +215,10 @@ O'QITISH VA RIVOJLANISH:
 • Ingliz tili: 50% subsidiya
 
 KONTAKTLAR:
-• HR: hr@bakertilly.uz
+• HR: shkabilov@bakertilly.uz
 • IT: it@bakertilly.uz
 
-Aniq javob bilmasangiz: HR ga murojaat qilishni tavsiya eting: hr@bakertilly.uz""",
+Aniq javob bilmasangiz: HR ga murojaat qilishni tavsiya eting: shkabilov@bakertilly.uz""",
 }
 
 # ── Keyboards ─────────────────────────────────────────────────────────────────
