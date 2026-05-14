@@ -217,7 +217,7 @@ def ask_gemini(lang: str, history: list, user_text: str) -> str:
 
     url = (
         "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+        "models/gemini-2.0-flash:generateContent?key=***"
     )
     resp = requests.post(url, json=payload, timeout=30)
     resp.raise_for_status()
@@ -303,9 +303,11 @@ async def process_message(
     except Exception as e:
         err = str(e)
         print(f"[ERROR] {err}")
+        # Hide URL from error to protect API key
+        safe_err = err.split("?key=")[0] if "?key=" in err else err[:200]
         msgs = {
-            "ru": f"Ошибка соединения: {err[:200]}\n\nПопробуйте позже или: hr@bakertilly.uz",
-            "uz": f"Ulanish xatosi: {err[:200]}\n\nhr@bakertilly.uz ga yozing",
+            "ru": f"Ошибка соединения: {safe_err}\n\nПопробуйте позже или: hr@bakertilly.uz",
+            "uz": f"Ulanish xatosi: {safe_err}\n\nhr@bakertilly.uz ga yozing",
         }
         await msg_obj.reply_text(msgs[lang])
 
